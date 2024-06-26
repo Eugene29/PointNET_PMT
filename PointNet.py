@@ -1,10 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from torch.autograd import Variable
 from torch.nn import Linear
-from time import time
 
 # class STNkd(nn.Module):
 '''
@@ -94,7 +91,6 @@ class PointClassifier(torch.nn.Module):
         self.encoder = PointNetfeat(dimensions=dim,
                                     dim_reduce_factor=dim_reduce_factor,
                                     args=args,)
-        # self.latent = self.encoder.latent_dim ## dimension from enc to dec
         self.decoder = nn.Sequential(
             nn.Dropout(p=dr),
             nn.Linear(self.encoder.latent_dim, int(512/dim_reduce_factor)),

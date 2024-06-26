@@ -42,7 +42,9 @@ args.accelerator = accelerator
 ddp_kwargs = accelerate.DistributedDataParallelKwargs()
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
 accelerator.print(f"ver: {ver}")
-init_logfile("Quantization")
+# init_logfile("Quantization")
+init_logfile(ver, quantize=True)
+print(type(ver))
 script_strt = time()
 
 ## Load/Preprocess Data
@@ -85,16 +87,13 @@ if args.load_ver is not None:
     accelerator.load_state(model_dir)
 
 ##### Quantization #####
-quantized_pth = "./Quantization/Quantized"
-os.makedirs(quantized_pth) if not os.path.exists(quantized_pth) else None
+quantized_dir = f"{ver}/quantized_dir/"
+os.makedirs(quantized_dir) if not os.path.exists(quantized_dir) else None
 
 ## Test the performance and check the size of the unquantized model
 model(next(iter(train_loader))[0]) ## Kernel Warm Up
 pred_all_data(model=model, train_loader=train_loader, val_loader=val_loader, test_loader=test_loader, accelerator=accelerator)
-pred_all_data(model=model, train_loader=train_loader, val_loader=val_loader, test_loader=test_loader, accelerator=accelerator)
-pred_all_data(model=model, train_loader=train_loader, val_loader=val_loader, test_loader=test_loader, accelerator=accelerator)
-pred_all_data(model=model, train_loader=train_loader, val_loader=val_loader, test_loader=test_loader, accelerator=accelerator)
-print_model_state_size(model, quantized_pth+"/model.pth")
+print_model_state_size(model, quantized_dir+"model.pth")
 
 # Quantize Model in int8
 quantize(model, weights=qint8, activations=qint8)
@@ -135,7 +134,7 @@ freeze(model)
 accelerator.print(model)
 
 ## Save model weights and compute performance and size. 
-torch.save(model.state_dict(), quantized_pth+"/model.pth")
+torch.save(model.state_dict(), quantized_dir+"/model.pth")
 print("Time and Performance after quantizaing: \n")
-print_model_state_size(model, quantized_pth+"/model.pth")
+print_model_state_size(model, quantized_dir+"/model.pth")
 pred_all_data(model=model, train_loader=train_loader, val_loader=val_loader, test_loader=test_loader, accelerator=accelerator)

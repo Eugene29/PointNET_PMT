@@ -3,7 +3,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import wandb
 import accelerate
 from accelerate import Accelerator
-from accelerate.utils import set_seed
 import os
 import argparse
 from tqdm import tqdm

@@ -10,7 +10,7 @@ from accelerate.utils import set_seed
 from torch.utils.data import TensorDataset, DataLoader
 
 
-def init_logfile(i):
+def init_logfile(i, quantize=False):
     '''
         create and set logfile to be written. Also write init messages such as args and seed
     '''
@@ -18,7 +18,8 @@ def init_logfile(i):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    log_file = open(f"{i}/train.txt", 'w', buffering=1)
+    fname = "train.txt" if not quantize else "quantize.txt" 
+    log_file = open(f"{i}/{fname}", 'w', buffering=1)
     sys.stderr = log_file
     sys.stdout = log_file
     return save_dir, log_file
@@ -230,10 +231,9 @@ def pred_all_data(model, train_loader, val_loader, test_loader, accelerator):
     accelerator.log(log_dict)
     accelerator.wait_for_everyone()
 
-def print_model_state_size(model, model_path):
+def print_model_state_size(model, model_pth):
     '''
         Save Model's states and Print its size. 
     '''
-    torch.save(model.state_dict(), model_path)
-    fpath = model_path
-    print("Size (MB):", os.path.getsize(fpath)/1e6)
+    torch.save(model.state_dict(), model_pth)
+    print("Size (MB):", os.path.getsize(model_pth)/1e6)
