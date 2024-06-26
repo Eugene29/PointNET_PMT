@@ -11,14 +11,18 @@
 - This code is agnostic of device (gpu, cpu, multi-gpu)
 - Training log will print out in `nohup.out` & `{ver}/train.txt`
 
-**Example Plots:**
+**Example Plots: (see if you can replicate)**
 
-Fully Trained Plot (XL)
-`nohup accelerate launch train.py --use_wandb --epochs 600 --enc_dropout 0 --dec_dropout 0.1 --weight_decay 5e-3 --lr 1e-3 --save_ver XL \
-                      --seed 999 --dim_reduce_factor 2 --batch_size 256 --scale_energy_loss 1000 --conv2lin`
-![Example Image](example_plots/pointNET_hist.png)
+**XL debug**
 
-Debug Mode Plot (XL debug)
 `nohup accelerate launch train.py --use_wandb --epochs 600 --enc_dropout 0 --dec_dropout 0.1 --weight_decay 5e-3 --lr 1e-3 --save_ver XL \
                       --seed 999 --dim_reduce_factor 2 --batch_size 256 --scale_energy_loss 1000 --conv2lin --debug`
+                      
 ![Example Image](example_plots/debug_pointNET_hist.png)
+
+**XL**
+
+`nohup accelerate launch train.py --use_wandb --epochs 600 --enc_dropout 0 --dec_dropout 0.1 --weight_decay 5e-3 --lr 1e-3 --save_ver XL \
+                      --seed 999 --dim_reduce_factor 2 --batch_size 256 --scale_energy_loss 1000 --conv2lin`
+                      
+![Example Image](example_plots/pointNET_hist.png)
