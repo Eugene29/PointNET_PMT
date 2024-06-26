@@ -9,7 +9,7 @@
 **Notes:**
 - Full training should take ~15 min (based on 4 x A5000)
 - This code is agnostic of device (gpu, cpu, multi-gpu)
-- Training log will print out in `nohup.out` & `{ver}/train.txt`
+- Training log will be printed in `"nohup.out"` & `f"{ver}/train.txt"`
 
 **Example Plots:**
 (see if you can replicate them)
