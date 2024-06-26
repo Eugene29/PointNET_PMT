@@ -10,7 +10,7 @@ from accelerate.utils import set_seed
 from torch.utils.data import TensorDataset, DataLoader
 
 
-def init_logfile(i, quantize=False):
+def init_logfile(i, mode=None):
     '''
         create and set logfile to be written. Also write init messages such as args and seed
     '''
@@ -18,7 +18,7 @@ def init_logfile(i, quantize=False):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    fname = "train.txt" if not quantize else "quantize.txt" 
+    fname = "train.txt" if mode is None else f"{mode}.txt" 
     log_file = open(f"{i}/{fname}", 'w', buffering=1)
     sys.stderr = log_file
     sys.stdout = log_file

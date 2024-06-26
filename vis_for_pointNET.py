@@ -34,7 +34,6 @@ accelerator = accelerate.Accelerator()
 ddp_kwargs = accelerate.DistributedDataParallelKwargs(broadcast_buffers=False)
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
 
-
 ## Load/Preprocess Data
 with accelerator.main_process_first():
     ## Load data
@@ -73,6 +72,7 @@ model, train_loader, val_loader, test_loader = accelerator.prepare(model, train_
 
 ## Load Model
 if args.load_ver == "Quantized":
+    ## UNAVAILABLE ATM
     quantize(model, weights=qint8, activations=qint8)
     save_name = f"Quantization/Quantized/pointNET"
     model_dir = f"Quantization/Quantized/model.pth"

@@ -34,17 +34,18 @@ parser.add_argument('--conv2lin', action="store_true")
 parser.add_argument('--scale_energy_loss', type=float, default=1)
 parser.add_argument('--QAT', type=int, default=0)
 
-## Initiate accelerator (distributed training) + flush output to {ver}/train.txt
+## Initiate accelerator (distributed training)
 args = parser.parse_args()
 ver = args.load_ver
 accelerator = accelerate.Accelerator()
-args.accelerator = accelerator
-ddp_kwargs = accelerate.DistributedDataParallelKwargs()
+# args.accelerator = accelerator
+# ddp_kwargs = accelerate.DistributedDataParallelKwargs()
+ddp_kwargs = accelerate.DistributedDataParallelKwargs(broadcast_buffers=False)
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
+
+## init log
 accelerator.print(f"ver: {ver}")
-# init_logfile("Quantization")
-init_logfile(ver, quantize=True)
-print(type(ver))
+init_logfile(ver, mode="quantize" if args.QAT is None else "QAT")
 script_strt = time()
 
 ## Load/Preprocess Data
@@ -79,7 +80,10 @@ nparam = sum([p.numel() for p in model.parameters()])
 accelerator.print(f"num. parameters: {nparam}")
 
 ## prepare variables to load state
-model, train_loader, val_loader, test_loader = accelerator.prepare(model, train_loader, val_loader, test_loader)
+# model, train_loader, val_loader, test_loader = accelerator.prepare(model, train_loader, val_loader, test_loader)
+optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+model, train_loader, val_loader, test_loader, optimizer = accelerator.prepare(model, train_loader, val_loader, test_loader, optimizer)
+
 model.eval()
 accelerator.wait_for_everyone()
 if args.load_ver is not None:
@@ -91,7 +95,7 @@ quantized_dir = f"{ver}/quantized_dir/"
 os.makedirs(quantized_dir) if not os.path.exists(quantized_dir) else None
 
 ## Test the performance and check the size of the unquantized model
-model(next(iter(train_loader))[0]) ## Kernel Warm Up
+model(next(iter(train_loader))[0]) ## Kernel Warm Up. NOTE: BUT THIS INTERFERES WITH SEED AND CAUSES MISMATCH IN PERFORMANCE
 pred_all_data(model=model, train_loader=train_loader, val_loader=val_loader, test_loader=test_loader, accelerator=accelerator)
 print_model_state_size(model, quantized_dir+"model.pth")
 
@@ -103,11 +107,13 @@ with torch.no_grad():
             X, y = batch
             model(X)
 
-## Quantization Aware Training (more like finetuning)
+## Quantization Aware Training
 if args.QAT:
+    ## NOT WORKING ATM
     ## New Optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    optimizer = accelerator.prepare(optimizer)
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    # optimizer = accelerator.prepare(optimizer)
+    optimizer.param_groups[0]['lr'] = 1e-4
     current_lr = optimizer.param_groups[0]['lr']
     print(current_lr)
     model.train()
