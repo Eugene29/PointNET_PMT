@@ -1,9 +1,14 @@
-import pandas as pd
 import torch
+import torch.nn.functional as F
 import os
 import sys
 import matplotlib.pyplot as plt
-# from pprint import pprint
+from pprint import pprint
+from time import time
+import numpy as np
+from accelerate.utils import set_seed
+from torch.utils.data import TensorDataset, DataLoader
+
 
 def init_logfile(i):
     '''
@@ -22,106 +27,72 @@ def clean_nohup_out():
     with open("nohup.out", "w") as f:
         pass
 
-def preprocess_features(X):
+def preprocess_features(X, n_hits, args):
     '''
-        switch to match Aobo's syntax (time, charge, x, y, z) -> (x, y, z, label, time, charge)
-        insert "label" feature to tensor. This feature (0 or 1) is the activation of sensor
+        1. swap the syntax (time, charge, x, y, z) -> (x, y, z, time, charge)
+        2. zero out xyz positions of sensors that are not activated
     '''
-    X = X[:, :, [2, 3, 4, 0, 1]]
-    X = X.mT
-    print("preprocessing data...")
+    new_X = X.clone() ## same as deepcopy's copy() but optimzied for tensors
+    new_X = new_X[:, :, [2, 3, 4, 0, 1]]
+    new_X = new_X.mT
 
-    ## insert "label" feature to tensor. This feature (0 or 1) is the activation of sensor
-    new_X = torch.zeros(X.shape[0], X.shape[1]+1, X.shape[2])
-    label_feat = ((X[:, 3, :] != 0) & (X[:, 4, :] != 0)).float() ## register 0 if both time and charge == 0.
-    new_X[:, 3, :] = label_feat
-    new_X[:, :3, :] = X[:, :3, :]
-    new_X[:, 4:, :] = X[:, 3:, :]
+    ## create label tensor that contains 0 (not activated) or 1 (activated)
+    label_feat = ((new_X[:, 3, :] != 0) & (new_X[:, 4, :] != 0)).float() ## register 0 if both time and charge == 0.
     print(f"Training Data shape: {new_X.shape}")
+    label = label_feat.view(-1, 1, n_hits) ## add dimension to allow broadcasting
 
-    return X, new_X
+    ## zero out sensors not activated (including the position features as well)
+    new_X = new_X * label
+    F_dim = new_X.size(-2)
+    new_X = new_X.mT if args.conv2lin else new_X
+    return new_X, F_dim
 
-def plot_r_z(diff, dist, abs_diff, total_val_loss, save_name, accelerator):
-    z_pure_diff, radius_pure_diff = abs_diff.mean(dim=0)
-    tot_z_pure_diff, tot_r_pure_diff = abs_diff.sum(dim=0)
-    accelerator.print(f"z: {tot_z_pure_diff}, r: {tot_r_pure_diff}")
-
-    z_diff = torch.cat(diff["z"], dim=0).cpu()
-    radius_diff = torch.cat(diff["radius"], dim=0).cpu()
-    unif_r_diff = torch.cat(diff["unif_r"], dim=0).cpu()
-
-    z_pred = torch.cat(dist["z_pred"], dim=0).cpu()
-    z = torch.cat(dist["z"], dim=0).cpu()
-    radius_pred = torch.cat(dist["radius_pred"], dim=0).cpu()
-    radius = torch.cat(dist["radius"], dim=0).cpu()
-    unif_radius_pred = torch.cat(dist["unif_r_pred"], dim=0).cpu()
-    unif_radius = torch.cat(dist["unif_r"], dim=0).cpu()
-
-    ## Plot histograms (diffs)
-    plt.close()
-    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(20, 10))
-    fig.suptitle(f"Val. MSE: {total_val_loss:.2f} (MSE(z) + MSE(radius))\n\
-    Avg. abs. diff. in z={z_pure_diff:.2f}, r={radius_pure_diff:.2f}")
-
-    ## diff. plots
-    z_diff_range = (-100, 100)
-    axes[0,0].hist(z_diff, bins=20, range=z_diff_range, edgecolor='black')
-    axes[0,0].set_title(r"z_diff ($z - \hat{z}$)")
-    axes[0,0].set_xlabel('z difference')
-    axes[0,0].set_ylabel('frequency')
-
-    r_diff_range = (-100, 100)
-    axes[0,1].hist(radius_diff, bins=20, range=r_diff_range, edgecolor='black')
-    axes[0,1].set_title(r"radius_diff ($r - \hat{r}$)")
-    axes[0,1].set_xlabel('radius diff')
-    axes[0,1].set_ylabel('frequency')
-
-    unif_r_diff_range = (-100, 100)
-    axes[0,2].hist(unif_r_diff, bins=20, range=unif_r_diff_range, edgecolor='black')
-    axes[0,2].set_title(r"(uniformalized) unif_radius ($r' - \hat{r'}$)")
-    axes[0,2].set_xlabel('(uniformalized) radius diff')
-    axes[0,2].set_ylabel('frequency')
-
-    ## dist. plots
-    # z_range = (min(z.min(), z_pred.min()).item(), max(z.max(), z_pred.max()).item())
-    z_range = (-200, 200)
-    axes[1,0].hist(z, bins=20, range=z_range, edgecolor='black', label="z")
-    axes[1,0].hist(z_pred, bins=20, range=z_range, edgecolor='blue', label=r'$\hat{z}$', alpha=0.5)
-    axes[1,0].set_title("z dist")
-    axes[1,0].set_xlabel('z')
-    axes[1,0].set_ylabel('frequency')
-
-    # radius_range = (min(radius.min(), radius_pred.min()).item(), max(radius.max(), radius_pred.max()).item())
-    radius_range = (0, 200)
-    axes[1,1].hist(radius, bins=20, range=radius_range, edgecolor='black', label=r"$r$")
-    axes[1,1].hist(radius_pred, bins=20, range=radius_range, edgecolor='blue', label=r"$\hat{r}$", alpha=0.5)
-    axes[1,1].set_title("radius dist")
-    axes[1,1].set_xlabel('radius')
-    axes[1,1].set_ylabel('frequency')
-
-    # unif_radius_range = (min(unif_radius.min(), unif_radius_pred.min()).item(), max(unif_radius.max(), unif_radius_pred.max()).item())
-    unif_radius_range = (0, 150)
-    axes[1,2].hist(unif_radius, bins=20, range=unif_radius_range, edgecolor='black', label=r"unif. $r$")
-    axes[1,2].hist(unif_radius_pred, bins=20, range=unif_radius_range, edgecolor='blue', label=r"unif. $\hat{r}$", alpha=0.5)
-    axes[1,2].set_title("(uniformalized) radius_dist")
-    axes[1,2].set_xlabel(r'(uniformalized) radius $(r / 35) ^ {1 / 3}$')
-    axes[1,2].set_ylabel('frequency')
-
-    axes[1, 0].legend()
-    axes[1, 1].legend()
-    axes[1, 2].legend()
-
-    plt.savefig(save_name + "_hist.png")
-    plt.close()
-
-def plot_reg(diff, dist, total_val_loss, abs_diff, save_name, args):
-    if args.xyz_energy:
-        abs_x_diff, abs_y_diff, abs_z_diff, abs_energy_diff = abs_diff.mean(dim=0)
-        energy_diff = torch.cat(diff["energy"], dim=0).cpu()
-        energy_pred = torch.cat(dist["energy_pred"], dim=0).cpu()
-        energy = torch.cat(dist["energy"], dim=0).cpu()
+def load_model(model, state_dict):
+    '''
+        Manually load data. However, using accelerate's load_state is preferred, which also saves the rng state, etc. 
+    '''
+    if hasattr(model, "module"):
+        model.module.load_state_dict(state_dict)
     else:
-        abs_x_diff, abs_y_diff, abs_z_diff = abs_diff.mean(dim=0)
+        model.load_state_dict(state_dict)
+    return model
+
+def shuffle_data(new_X, y, n_data, args):
+    '''
+        shuffle data and return train, val, test loader
+    '''
+    ## shuffle idx
+    np.random.seed(seed=args.seed)
+    set_seed(seed=args.seed)
+    idx = np.random.permutation(n_data)
+    saved = new_X.clone(), y.clone()
+    new_X, y = new_X[idx], y[idx]
+    assert torch.ne(saved[0], new_X).any() and torch.ne(saved[1], y).any(), "shuffling failed"
+
+    ## create tensordataset
+    train_split = 0.6
+    val_split = 0.2
+    train_idx = int(n_data * train_split)
+    val_idx = int(train_idx + n_data * val_split)
+    train = TensorDataset(new_X[:train_idx], y[:train_idx])
+    val = TensorDataset(new_X[train_idx:val_idx], y[train_idx:val_idx])
+    test = TensorDataset(new_X[val_idx:], y[val_idx:])
+
+    ## create Dataloader
+    train_loader = DataLoader(train, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val, batch_size=args.batch_size)
+    test_loader = DataLoader(test, batch_size=args.batch_size)
+
+    return train_loader, val_loader, test_loader
+
+def plot_reg(diff, dist, test_loss, abs_diff, save_name):
+    '''
+        Create and save a plot of 6 total histogram (1 fig). 
+    '''
+    abs_x_diff, abs_y_diff, abs_z_diff, abs_energy_diff = abs_diff.mean(dim=0)
+    energy_diff = torch.cat(diff["energy"], dim=0).cpu()
+    energy_pred = torch.cat(dist["energy_pred"], dim=0).cpu()
+    energy = torch.cat(dist["energy"], dim=0).cpu()
 
     x_diff = torch.cat(diff["x"], dim=0).cpu()
     y_diff = torch.cat(diff["y"], dim=0).cpu()
@@ -136,14 +107,9 @@ def plot_reg(diff, dist, total_val_loss, abs_diff, save_name, args):
     z = torch.cat(dist["z"], dim=0).cpu()
 
     plt.close()
-    if args.xyz_energy:
-        fig, axes = plt.subplots(nrows=2, ncols=4, figsize=(20, 10))
-        fig.suptitle(f"Val. MSE: {total_val_loss:.2f} (MSE(x) + MSE(y) + MSE(y) + MSE(energy))\n\
-        Avg. abs. diff. in x={abs_x_diff:.2f}, y={abs_y_diff:.2f}, z={abs_z_diff:.2f}, energy={abs_energy_diff:.2f}")
-    else:
-        fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(20, 10))
-        fig.suptitle(f"Val. MSE: {total_val_loss:.2f} (MSE(x) + MSE(y) + MSE(y))\n\
-        Avg. abs. diff. in x={abs_x_diff:.2f}, y={abs_y_diff:.2f}, z={abs_z_diff:.2f}")
+    fig, axes = plt.subplots(nrows=2, ncols=4, figsize=(20, 10))
+    fig.suptitle(f"Test MSE: {test_loss:.2f} (MSE(x) + MSE(y) + MSE(y) + MSE(energy))\n\
+    Avg. abs. diff. in x={abs_x_diff:.2f}, y={abs_y_diff:.2f}, z={abs_z_diff:.2f}, energy={abs_energy_diff:.2f}")
 
     ## diff. plots
     x_diff_range = (-50, 50)
@@ -192,7 +158,8 @@ def plot_reg(diff, dist, total_val_loss, abs_diff, save_name, args):
     axes[1,2].set_xlabel(r'z')
     axes[1,2].set_ylabel('freq')
 
-    energy_range = (0, 4)
+    energy_range = (-1, 4)
+    # energy_range = (-10, 10)
     axes[1,3].hist(energy, bins=20, range=energy_range, edgecolor='black', label="label")
     axes[1,3].hist(energy_pred, bins=20, range=energy_range, edgecolor='blue', label="pred", alpha=0.5)
     axes[1,3].set_title("energy")
@@ -206,3 +173,67 @@ def plot_reg(diff, dist, total_val_loss, abs_diff, save_name, args):
 
     plt.savefig(save_name + "_hist.png")
     plt.close()
+
+def pred_all_data(model, train_loader, val_loader, test_loader, accelerator):
+    '''
+        Predict on all data (train, val, test), print each loss, and the time it took.
+    '''
+    torch.cuda.empty_cache()
+    model.eval()
+    strt = time()
+    with torch.no_grad():
+        train_loss = 0
+        out_lst = []
+        y_lst = []
+        for batch in train_loader:
+            X, y = batch
+            out = model(X)
+            out, y = accelerator.gather(out), accelerator.gather(y)
+            train_loss += F.mse_loss(out, y).item()
+            out_lst.append(out)
+            y_lst.append(y)
+        train_loss /= len(train_loader)
+
+        ## val (confirm) loop
+        val_loss = 0
+        for batch in val_loader:
+            X, y = batch
+            out = model(X)
+            out, y = accelerator.gather(out), accelerator.gather(y)
+            val_loss += F.mse_loss(out, y).item()
+        val_loss /= len(val_loader)
+
+        ## test loop
+        abs_diff, test_loss = [], 0
+        for batch in test_loader:
+            X, y = batch
+            out = model(X)
+            out, y = accelerator.gather(out), accelerator.gather(y)
+            test_loss += F.mse_loss(out, y).item()
+            abs_diff.append((y - out).abs())
+        test_loss /= len(test_loader)
+
+        ## Logging
+        abs_diff = torch.cat(abs_diff)
+        abs_x_diff, abs_y_diff, abs_z_diff, abs_energy_diff = abs_diff.mean(dim=0).cpu().numpy()
+        abs_dict = {"abs_x_diff": abs_x_diff, "abs_y_diff": abs_y_diff, "abs_z_diff": abs_z_diff, "abs_energy_diff": abs_energy_diff}
+
+    ## time
+    tot_time = time() - strt
+    accelerator.print(f"\nTotal time taken: {tot_time:.2f} secs\n")
+
+    ## recall: ** is for unpacking keys: vals (kwargs for short)
+    log_dict = {**abs_dict, **{"train_loss": train_loss, "val_loss": val_loss, "test_loss": test_loss}}
+    if accelerator.is_local_main_process:
+        pprint(log_dict)
+        print("\n")
+    accelerator.log(log_dict)
+    accelerator.wait_for_everyone()
+
+def print_model_state_size(model, model_path):
+    '''
+        Save Model's states and Print its size. 
+    '''
+    torch.save(model.state_dict(), model_path)
+    fpath = model_path
+    print("Size (MB):", os.path.getsize(fpath)/1e6)
