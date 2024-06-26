@@ -4,7 +4,7 @@
 1. Add data called `train_X_y_ver_all_xyz_energy.pt` into `/data` folder
 2. Install packages `pip install -r requirements.txt` (Not extensively tested. Let Eugene know if libraries seem to mismatch)
 3. run `. multiple_exp.sh` (edit bash file configuration such as adding `--debug` to run **sample** of data)
-4. See if you can replicate plots inside `example_plots` folder
+4. See if you can replicate example plots below
 
 **Notes:**
 - Full training should take ~15 min (based on 4 x A5000)
