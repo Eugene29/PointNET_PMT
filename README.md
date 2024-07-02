@@ -7,7 +7,7 @@
 4. See if you can replicate example plots below
 
 **Notes:**
-- Full training should take ~15 min (based on 4 x A5000)
+- Full training should take ~15 min (based on 4 x A5000), 1:15 hr for single A5000.
 - This code is agnostic of device (gpu, cpu, multi-gpu)
 - Training log will be printed in `"nohup.out"` & `f"{ver}/train.txt"`
 
@@ -18,8 +18,6 @@
 
 command: `nohup accelerate launch train.py --use_wandb --epochs 600 --enc_dropout 0 --dec_dropout 0.1 --weight_decay 5e-3 --lr 1e-3 --save_ver XL \
                       --seed 999 --dim_reduce_factor 2 --batch_size 256 --scale_energy_loss 1000 --conv2lin --debug`
-                      
-![Example Image](example_plots/debug_pointNET_hist.png)
 
 **2. XL**
 
