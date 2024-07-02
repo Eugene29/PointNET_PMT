@@ -7,7 +7,7 @@
 4. See if you can replicate example plots below
 
 **Notes:**
-- Full training should take ~15 min (based on 4 x A5000), 1:15 hr for single A5000.
+- Full training should take ~15 min (based on 4 x A5000), 1:10 hr for single A5000.
 - This code is agnostic of device (gpu, cpu, multi-gpu)
 - Training log will be printed in `"nohup.out"` & `f"{ver}/train.txt"`
 
