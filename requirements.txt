@@ -63,3 +63,6 @@ urllib3==2.2.1
 wandb==0.17.0
 wcwidth==0.2.13
 zipp==3.18.1
+tensorflow==2.16.2
+QKeras==0.9.0
+tf_keras==2.16.0
