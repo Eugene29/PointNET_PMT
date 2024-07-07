@@ -16,7 +16,7 @@ def init_logfile(i, mode=None):
     '''
     save_dir = f"./{i}"
     if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+        os.makedirs(save_dir, exist_ok=True)
 
     fname = "train.txt" if mode is None else f"{mode}.txt" 
     log_file = open(f"{i}/{fname}", 'w', buffering=1)
