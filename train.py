@@ -13,6 +13,7 @@ from time import time
 from PointNet import *
 from read_point_cloud import * 
 from utils import *
+from preprocess import preprocess
 
 strt = time()
 clean_nohup_out()
@@ -44,36 +45,39 @@ accelerator = accelerate.Accelerator()
 os.environ["WANDB_DISABLED"] = str(not args.use_wandb or args.debug)
 ddp_kwargs = accelerate.DistributedDataParallelKwargs()
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], log_with="wandb")
-accelerator.print(f"ver: {ver}")
-init_logfile(ver)
 script_strt = time()
 
 ## model save name
 model_dir = f"./{ver}/model_dir/"
 
-## Load/Preprocess Data
+## Preprocess Data
+if accelerator.is_main_process:
+    print(f"ver: {ver}")
+    init_logfile(ver)
+    if not os.path.exists("data/train_X_y_ver_all_xyz_energy.pt"):
+        raise FileNotFoundError("Make sure you download the data and put it inside a data folder")
+    elif not os.path.exists("data/preprocessed_data.pt"):
+        preprocess("data/train_X_y_ver_all_xyz_energy.pt")
+
+## Load preprocessed Data
 with accelerator.main_process_first():
-    ## Load data
+    # Load preprocessed data
     accelerator.print("loading data...")
-    pmtxyz = get_pmtxyz("data/pmt_xyz.dat", accelerator=accelerator)
-    X, y = torch.load(f"./data/train_X_y_ver_all_xyz_energy.pt", map_location=torch.device("cpu"))
-    X = X.float() ## double to single float
+    X, y = torch.load("data/preprocessed_data.pt")
     if args.debug:
-        accelerator.print("debug got called")
+        print("debug got called")
         small = 5000
         X, y = X[:small], y[:small]
 
-    ## Preprocess (time, charge, x, y, z) -> (x, y, z, time, charge) and zero out inactive sensors' x, y, z. 
-    accelerator.print("preprocessing data...")
-    new_X, F_dim,= preprocess_features(X, n_hits=pmtxyz.size(0), args=args) ## Output: [B, F, N] or [B, N, F]; F: (x, y, z, time, charge)
-
     ## update vars
-    args.batch_size = int(args.batch_size // accelerator.num_processes) ## Divide the batch size by the number of GPUs 
-    n_data = new_X.shape[0]
-    args.n_hits = pmtxyz.shape[0] ## num sensors
+    args.batch_size = int(args.batch_size // accelerator.num_processes) ## Divide the batch size by the number of GPUs
+    if args.conv2lin:
+        n_data, args.n_hits, F_dim = X.shape
+    else:
+        n_data, F_dim, args.n_hits = X.shape
 
     ## Shuffle Data (w/ Seed)
-    train_loader, val_loader, test_loader = shuffle_data(new_X=new_X, y=y, n_data=n_data, args=args)
+    train_loader, val_loader, test_loader = shuffle_data(new_X=X, y=y, n_data=n_data, args=args)
 
 ## Init model
 model = PointClassifier(
@@ -81,7 +85,7 @@ model = PointClassifier(
                 dim=F_dim, 
                 out_dim=y.size(-1),
                 dim_reduce_factor=args.dim_reduce_factor,
-                args = args,
+                args=args,
                 )
 nparam = sum([p.numel() for p in model.parameters()])
 accelerator.print(f"num. parameters: {nparam}")
@@ -220,7 +224,6 @@ min_train = round(min(train_lst), 2)
 loss_n_time = {"min_train": min_train, "min_val": best_val, "test_loss": test_loss, "avg_val_time": avg_val_time}
 log_dict = {**abs_dict, **loss_n_time} ## recall: ** is for unpacking keys: vals (kwargs for short)
 if accelerator.is_local_main_process:
-    # print("\n")
     pprint(log_dict)
 accelerator.log(log_dict) 
 accelerator.wait_for_everyone()

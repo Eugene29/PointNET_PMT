@@ -109,7 +109,7 @@ with torch.no_grad():
 
 ## Quantization Aware Training
 if args.QAT:
-    ## NOT WORKING ATM
+    ## QAT NOT SUPPORTED ATM
     ## New Optimizer
     # optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     # optimizer = accelerator.prepare(optimizer)

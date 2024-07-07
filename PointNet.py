@@ -63,7 +63,6 @@ class PointNetfeat(nn.Module):
             self.conv1 = torch.nn.Conv1d(dimensions, F1, 1)  # lose a dimension after coordinate transform
             self.conv2 = torch.nn.Conv1d(self.conv1.out_channels, F2, 1)
             self.conv3 = torch.nn.Conv1d(self.conv2.out_channels, self.latent_dim, 1)
-        self.dr1 = nn.Dropout(dr)
         self.dr2 = nn.Dropout(dr)
     
     def stats(self, x):
@@ -72,7 +71,7 @@ class PointNetfeat(nn.Module):
     
     def forward(self, x):
         x = self.conv1(x)
-        x = F.relu(self.dr1(x))
+        x = F.relu(x)
         x = F.relu(self.dr2(self.conv2(x)))
         x = self.conv3(x)
         global_stats = self.stats(x)
