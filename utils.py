@@ -359,6 +359,63 @@ def pred_all_data(model, train_loader, val_loader, test_loader, accelerator):
     accelerator.log(log_dict)
     accelerator.wait_for_everyone()
 
+def tf_pred_all_data(model, train_loader, val_loader, test_loader, loss_fn, verbose=False):
+    '''
+        Predict on all data (train, val, test), print each loss, and the time it took.
+    '''
+    strt = time()
+    train_loss, val_loss, test_loss = 0, 0, 0
+    abs_diff = []
+    print("testing inference speed and performance...")
+    for X, y in train_loader:
+        out = model(inputs=X, training=False)
+        loss = loss_fn(out=out, y=y, training=False)
+        train_loss += loss.numpy()
+        abs_diff.append(tf.abs(y - out))
+        if verbose:
+            print(out)
+
+    for X, y in val_loader:
+        out = model(inputs=X, training=False)
+        loss = loss_fn(out=out, y=y, training=False)
+        val_loss += loss.numpy()
+        abs_diff.append(tf.abs(y - out))
+
+    for X, y in test_loader:
+        out = model(inputs=X, training=False)
+        loss = loss_fn(out=out, y=y, training=False)
+        test_loss += loss.numpy()
+        abs_diff.append(tf.abs(y - out))
+        # test_loss += distributed_eval_step(X, y).numpy()
+
+    train_loss /= len(val_loader) # test_len
+    val_loss /= len(test_loader) # test_len
+    test_loss /= len(test_loader) # test_len
+
+    ## Logging
+    abs_diff = tf.concat(abs_diff, axis=0)
+    abs_x_diff, abs_y_diff, abs_z_diff, abs_energy_diff = abs_diff.cpu().numpy().mean(axis=0)
+    abs_dict = {"abs_x_diff": abs_x_diff, "abs_y_diff": abs_y_diff, "abs_z_diff": abs_z_diff, "abs_energy_diff": abs_energy_diff}
+    print(f"test_loss: {test_loss:.2f}")
+
+    # Logging results
+    tot_time = time() - strt
+    print(f"Entire script time taken: {tot_time:.0f} secs")
+
+    # Summary of results
+    log_dict = {
+        "train_loss": train_loss,
+        "val_loss": val_loss,
+        "test_loss": test_loss,
+    }
+
+    log_dict.update(abs_dict)
+
+    print("\nResults summary:")
+    for k, v in log_dict.items():
+        print(f"{k}: {round(v, 2)}")
+
+
 def print_model_state_size(model, model_pth):
     '''
         Save Model's states and Print its size. 
@@ -388,3 +445,31 @@ def build_model(model):
     print(model.layers[1].layers)
     # print(model.layers[1].summary())
     # pprint(model.layers[0].layers + model.layers[1].layers)
+
+def flatten_model(model_nested):
+    import tf_keras
+    layers_flat = []
+    for layer in model_nested.layers:
+        try:
+            layers_flat.extend(layer.layers)
+        except AttributeError:
+            layers_flat.append(layer)
+    # model_flat = keras.models.Sequential(layers_flat)
+    model_flat = tf_keras.models.Sequential(layers_flat)
+    return model_flat
+
+# def flatten_model(model_nested):
+#     def get_layers(layers):
+#         layers_flat = []
+#         for layer in layers:
+#             try:
+#                 layers_flat.extend(get_layers(layer.layers))
+#             except AttributeError:
+#                 layers_flat.append(layer)
+#         return layers_flat
+
+#     # model_flat = tf.keras.models.Sequential(
+#     model_flat = tf_keras.models.Sequential(
+#         get_layers(model_nested.layers)
+#     )
+#     return model_flat

@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tf_keras
 import torch
 import wandb
 import argparse
@@ -6,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 from time import time
 
-from tf_PointNet import PointClassifier
+from tf_PointNet import *
 from qPointNet import qPointClassifier
 from utils import *
 from preprocess import preprocess
@@ -44,7 +45,7 @@ ver = args.save_ver
 # print(f"Number of devices: {args.num_devices}")
 
 # Initialize W&B
-if args.use_wandb:
+if args.use_wandb and not args.debug:
     wandb.init(project="pointNET", config=args)
     config = wandb.config
 
@@ -100,19 +101,21 @@ if args.QAT:
         args=vars(args),
     )
 else:
-    model = PointClassifier(
+    nested_model = PointClassifier(
         n_hits=args.n_hits,
         dim=F_dim,
         out_dim=y.shape[-1],
         dim_reduce_factor=args.dim_reduce_factor,
         args=vars(args),
     )
+    model = flatten_model(nested_model)
+    print(model.summary())
 
 # Define optimizer and loss function
-optimizer = tf.keras.optimizers.AdamW(learning_rate=args.lr, weight_decay=args.weight_decay, epsilon=1e-8)
+optimizer = tf_keras.optimizers.AdamW(learning_rate=args.lr, weight_decay=args.weight_decay, epsilon=1e-8)
 
 # Define learning rate scheduler
-lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(
+lr_scheduler = tf_keras.callbacks.ReduceLROnPlateau(
     monitor='train_loss',
     factor=0.8,
     # patience=int(args.patience * strategy.num_replicas_in_sync), ## for distributed training 
@@ -125,7 +128,6 @@ lr_scheduler.set_model(model)
 
 # Compile model
 model.compile(optimizer=optimizer)
-build_model(model)
 
 ## Count param after running one sample
 nparam = model.count_params()
@@ -139,13 +141,13 @@ train_lst, val_time_lst = [], []
 @tf.function
 def loss_fn(out, y, training=True):
     if training:
-        xyz_loss = tf.keras.losses.MSE(y_true=y[:, :-1], y_pred=out[:, :-1])
+        xyz_loss = tf_keras.losses.MSE(y_true=y[:, :-1], y_pred=out[:, :-1])
         xyz_loss = tf.nn.compute_average_loss(xyz_loss)
-        energy_loss = tf.keras.losses.MAE(y_true=y[:, -1], y_pred=out[:, -1])
+        energy_loss = tf_keras.losses.MAE(y_true=y[:, -1], y_pred=out[:, -1])
         return xyz_loss + args.scale_energy_loss * energy_loss
     else:
         # tf.print("evaluating")
-        loss = tf.keras.losses.MSE(y_true=y, y_pred=out)
+        loss = tf_keras.losses.MSE(y_true=y, y_pred=out)
         return tf.reduce_mean(loss)
 
 ## For distributed training
@@ -184,7 +186,7 @@ for epoch in range(args.epochs):
 
     for i, (X, y) in enumerate(train_loader):
         with tf.GradientTape() as tape:
-            out = model(x=X, training=True)
+            out = model(inputs=X, training=True)
             loss = loss_fn(out=out, y=y, training=True)
         gradients = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -202,7 +204,7 @@ for epoch in range(args.epochs):
         val_loss = 0
         val_strt = time()
         for X, y in val_loader:
-            out = model(x=X, training=False)
+            out = model(inputs=X, training=False)
             loss = loss_fn(out=out, y=y, training=False)
             val_loss += loss.numpy()
             # val_loss += distributed_eval_step(X, y).numpy() ## For distributed training
@@ -232,14 +234,15 @@ for epoch in range(args.epochs):
 # tf.profiler.experimental.stop()
 
 # Load best model for testing
-model = tf.keras.models.load_model(model_pth, custom_objects={'PointClassifier': PointClassifier})
+# model = tf_keras.models.load_model(model_pth, custom_objects={'PointClassifier': PointClassifier})
+model = tf_keras.models.load_model(model_pth, custom_objects={"TorchDefaultLinInit": TorchDefaultLinInit})
 print(f"\nModel loaded from {model_pth}")
 
 # Test loop
 test_loss = 0
 abs_diff = []
 for X, y in test_loader:
-    out = model(x=X, training=False)
+    out = model(inputs=X, training=False)
     loss = loss_fn(out=out, y=y, training=False)
     test_loss += loss.numpy()
     abs_diff.append(tf.abs(y - out))
@@ -268,7 +271,7 @@ log_dict = {
 
 log_dict.update(abs_dict)
 
-if args.use_wandb:
+if args.use_wandb and not args.debug:
     wandb.log(log_dict)
     wandb.finish()
 
