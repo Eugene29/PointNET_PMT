@@ -40,10 +40,10 @@ export XLA_FLAGS=--xla_gpu_cuda_data_dir="/opt/conda" ## necessary to prevent JI
 # nohup python -u tf_vis_for_pointNET.py --batch_size 256 --seed 999  --load_ver tf_XL --conv2lin --dim_reduce_factor 2
 # nohup python -u tf_vis_for_pointNET.py --batch_size 256 --seed 999  --load_ver tf_L --conv2lin --dim_reduce_factor 2.5
 # nohup python -u tf_vis_for_pointNET.py --batch_size 256 --seed 999  --load_ver tf_M --conv2lin --dim_reduce_factor 3
-# nohup python -u tf_vis_for_pointNET.py --batch_size 256 --seed 999  --load_ver tf_S --conv2lin --dim_reduce_factor 3.5
+nohup python -u tf_vis_for_pointNET.py --batch_size 256 --seed 999  --load_ver tf_S --conv2lin --dim_reduce_factor 3.5
 
 # # Quantization
 # nohup python tf_Quantization.py  --seed 999 --batch_size 256 --dim_reduce_factor 2 --load_ver tf_XL --conv2lin
 # nohup python tf_Quantization.py  --seed 999 --batch_size 256 --dim_reduce_factor 2.5 --load_ver tf_L --conv2lin
 # nohup python tf_Quantization.py  --seed 999 --batch_size 256 --dim_reduce_factor 3 --load_ver tf_M --conv2lin
-nohup python tf_Quantization.py  --seed 999 --batch_size 256 --dim_reduce_factor 3.5 --load_ver tf_S --conv2lin
+# nohup python tf_Quantization.py  --seed 999 --batch_size 256 --dim_reduce_factor 3.5 --load_ver tf_S --conv2lin

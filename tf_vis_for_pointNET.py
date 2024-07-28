@@ -29,7 +29,7 @@ args = parser.parse_args()
 
 # Initialize log file
 ver = args.load_ver
-init_logfile(ver)
+init_logfile(ver, mode="vis")
 pprint(vars(args))
 
 # Model save directory
@@ -87,7 +87,8 @@ model = PointClassifier(
 )
 
 ## load model
-model = tf.keras.models.load_model(model_pth, custom_objects={'PointClassifier': PointClassifier})
+model = tf_keras.models.load_model(model_pth, custom_objects={"TorchDefaultLinInit": TorchDefaultLinInit})
+# model = tf.keras.models.load_model(model_pth, custom_objects={'PointClassifier': PointClassifier})
 print(f"\nModel loaded from {model_pth}")
 
 ## Save model outputs and labels. Compute and store diff between output and label.
