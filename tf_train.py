@@ -108,7 +108,9 @@ else:
         dim_reduce_factor=args.dim_reduce_factor,
         args=vars(args),
     )
-    model = flatten_model(nested_model)
+    # model = flatten_model(nested_model)
+    model = nested_model
+    build_model(model)
     print(model.summary())
 
 # Define optimizer and loss function
@@ -186,7 +188,7 @@ for epoch in range(args.epochs):
 
     for i, (X, y) in enumerate(train_loader):
         with tf.GradientTape() as tape:
-            out = model(inputs=X, training=True)
+            out = model(x=X, training=True)
             loss = loss_fn(out=out, y=y, training=True)
         gradients = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -204,7 +206,7 @@ for epoch in range(args.epochs):
         val_loss = 0
         val_strt = time()
         for X, y in val_loader:
-            out = model(inputs=X, training=False)
+            out = model(x=X, training=False)
             loss = loss_fn(out=out, y=y, training=False)
             val_loss += loss.numpy()
             # val_loss += distributed_eval_step(X, y).numpy() ## For distributed training
@@ -227,8 +229,10 @@ for epoch in range(args.epochs):
         print(f"\nEpoch {epoch}: ")
         print(f"Train Loss: {train_loss:.2f}\tval loss: {val_loss:.2f}\tCurrent LR: {current_lr:.6f}")
         print(f"Min Train Loss: {round(min(train_lst), 2)}")
+        wandb.log({"Train Loss": train_loss, "Val Loss": val_loss})
     else:
         print(f"Min Train Loss: {round(min(train_lst), 2)}")
+        wandb.log({"Train Loss": train_loss})
 
 # Stop profiling
 # tf.profiler.experimental.stop()
@@ -242,7 +246,7 @@ print(f"\nModel loaded from {model_pth}")
 test_loss = 0
 abs_diff = []
 for X, y in test_loader:
-    out = model(inputs=X, training=False)
+    out = model(x=X, training=False)
     loss = loss_fn(out=out, y=y, training=False)
     test_loss += loss.numpy()
     abs_diff.append(tf.abs(y - out))

@@ -82,7 +82,6 @@ def loss_fn(out, y, training=True):
 from tf_keras.utils import custom_object_scope
 
 model = tf_keras.models.load_model(model_pth, custom_objects={"TorchDefaultLinInit": TorchDefaultLinInit})
-# model = tf_keras.models.load_model(model_pth, custom_objects={'PointClassifier': PointClassifier})
 print(f"\nModel loaded from {model_pth}")
 
 

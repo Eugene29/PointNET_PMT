@@ -109,9 +109,9 @@ def tf_shuffle_data(X, y, n_data, args):
     train_idx = int(n_data * train_split)
     val_idx = int(train_idx + n_data * val_split)
 
-    torch.save((torch.tensor(X[:train_idx].numpy()), torch.tensor(y[:train_idx].numpy())), "data/preprocessed_train.pt")
-    torch.save((torch.tensor(X[train_idx:val_idx].numpy()), torch.tensor(y[train_idx:val_idx].numpy())), "data/preprocessed_val.pt")
-    torch.save((torch.tensor(X[val_idx:].numpy()), torch.tensor(y[val_idx:].numpy())), "data/preprocessed_test.pt")
+    # torch.save((torch.tensor(X[:train_idx].numpy()), torch.tensor(y[:train_idx].numpy())), "data/preprocessed_train.pt")
+    # torch.save((torch.tensor(X[train_idx:val_idx].numpy()), torch.tensor(y[train_idx:val_idx].numpy())), "data/preprocessed_val.pt")
+    # torch.save((torch.tensor(X[val_idx:].numpy()), torch.tensor(y[val_idx:].numpy())), "data/preprocessed_test.pt")
 
     train_dataset = tf.data.Dataset.from_tensor_slices((X[:train_idx], y[:train_idx]))
     val_dataset = tf.data.Dataset.from_tensor_slices((X[train_idx:val_idx], y[train_idx:val_idx]))
@@ -425,9 +425,9 @@ def print_model_state_size(model, model_pth):
 
 def build_model(model):
     dense_input_shapes = model.layers[0].encoder_input_shapes
-    all_input_shapes = dense_input_shapes + [dense_input_shapes[1], dense_input_shapes[2]]
-    for layer, input_shape in zip(model.layers[0].layers, all_input_shapes):
-        layer.build((input_shape,))
+    # all_input_shapes = dense_input_shapes + [dense_input_shapes[1], dense_input_shapes[2]]
+    # for layer, input_shape in zip(model.layers[0].layers, all_input_shapes):
+    #     layer.build((input_shape,))
 
     input_dim = dense_input_shapes[0]
     latent_dim = model.layers[0].latent_dim
