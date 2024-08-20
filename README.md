@@ -1,6 +1,6 @@
 **Steps:**
 
-0. Download data from `https://drive.google.com/file/d/1F_ZjeqmKkpWNXyd9JD-zty2SNe95TlUz/view?usp=sharing`
+0. Download data (ask Eugene or Aobo)
 1. Add data called `train_X_y_ver_all_xyz_energy.pt` into `/data` folder
 2. Install packages `pip install -r requirements.txt` (Not extensively tested. Let Eugene know if libraries seem to mismatch)
 3. run `. multiple_exp.sh` (edit bash file configuration such as adding `--debug` to run **sample** of data)
